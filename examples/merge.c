@@ -37,7 +37,6 @@ struct merge_options {
 static void print_usage(void)
 {
 	fprintf(stderr, "usage: merge [--no-commit] <commit...>\n");
-	exit(1);
 }
 
 static void merge_options_init(struct merge_options *opts)
@@ -62,12 +61,14 @@ static void opts_add_refish(struct merge_options *opts, const char *refish)
 	opts->heads[opts->heads_count - 1] = refish;
 }
 
-static void parse_options(const char **repo_path, struct merge_options *opts, int argc, char **argv)
+static int parse_options(const char **repo_path, struct merge_options *opts, int argc, char **argv)
 {
 	struct args_info args = ARGS_INFO_INIT;
 
-	if (argc <= 1)
+	if (argc <= 1) {
 		print_usage();
+		return -1;
+	}
 
 	for (args.pos = 1; args.pos < argc; ++args.pos) {
 		const char *curr = argv[args.pos];
@@ -82,8 +83,10 @@ static void parse_options(const char **repo_path, struct merge_options *opts, in
 			continue;
 		} else {
 			print_usage();
+			return -1;
 		}
 	}
+	return 0;
 }
 
 static int resolve_heads(git_repository *repo, struct merge_options *opts)
@@ -229,7 +232,8 @@ static int create_merge_commit(git_repository *repo, git_index *index, struct me
 
 	/* Maybe that's a ref, so DWIM it */
 	err = git_reference_dwim(&merge_ref, repo, opts->heads[0]);
-	check_lg2(err, "failed to DWIM reference", git_error_last()->message);
+	if (err != 0) // iOS addition, this was causing a crash
+		check_lg2(err, "failed to DWIM reference", git_error_last()->message);
 
 	/* Grab a signature */
 	check_lg2(git_signature_now(&sign, "Me", "me@example.com"), "failed to create signature", NULL);
@@ -289,7 +293,8 @@ int lg2_merge(git_repository *repo, int argc, char **argv)
 	int err = 0;
 
 	merge_options_init(&opts);
-	parse_options(&path, &opts, argc, argv);
+	if (parse_options(&path, &opts, argc, argv) < 0) 
+		goto cleanup;
 
 	state = git_repository_state(repo);
 	if (opts.abort_merge) {

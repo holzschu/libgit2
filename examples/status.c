@@ -161,6 +161,8 @@ static int show_change_details_long(
 	const git_status_entry *s;
 	const char *old_path, *new_path;
 
+		fprintf(stderr, "maxi= %d %d\n", maxi);
+	
 
 	for (i = 0; i < maxi; ++i) {
 		char *istatus = NULL;
@@ -168,6 +170,7 @@ static int show_change_details_long(
 		char *status_description = NULL;
 
 		s = git_status_byindex(status, i);
+		fprintf(stderr, "status= %d i: %d\n", s, i);
 
 		/**
 		 * With `GIT_STATUS_OPT_INCLUDE_UNMODIFIED` (not used in this example)
@@ -210,6 +213,7 @@ static int show_change_details_long(
 		if (listing_workdir_changes && wstatus == NULL)
 			continue;
 
+		fprintf(stderr, "header= %d listing_index_changes: %d\n", header, listing_index_changes);
 		if (!header && listing_index_changes) {
 			printf("# Changes to be committed:\n");
 			printf("#   (use \"lg2 reset HEAD <file>...\" to unstage)\n");

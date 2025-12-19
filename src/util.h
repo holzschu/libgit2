@@ -348,7 +348,7 @@ GIT_INLINE(double) git__timer(void)
 GIT_INLINE(double) git__timer(void)
 {
    uint64_t time = mach_absolute_time();
-   static double scaling_factor = 0;
+   static __thread double scaling_factor = 0;
 
    if (scaling_factor == 0) {
        mach_timebase_info_data_t info;

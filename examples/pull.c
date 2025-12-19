@@ -111,13 +111,14 @@ int lg2_pull(git_repository *repo, int argc, char **argv)
 	argv_merge[0] = "merge";
 	argv_merge[1] = "FETCH_HEAD";
 	// New code: get the merge error to report
-	int result = lg2_merge(repo, 2, argv_merge);
+	int merge_result = 0;
+	merge_result = lg2_merge(repo, 2, argv_merge);
 
 	/* Done */
 
 	git_remote_free(remote);
 
-	return result;
+	return merge_result;
 
  on_error:
 	git_remote_free(remote);

@@ -306,6 +306,33 @@ out:
 	return error;
 }
 
+// Copied from branch.c, but without the cleanup part to avoir a doubly-released memory error.
+#define NO_FORCE 0
+static int lg2_branch_create_from_head_no_cleanup(git_repository *repo, char* branch_name)
+{
+	git_commit* current_head = NULL;
+	git_reference* ref = NULL;
+	int error = 0;
+
+	error = get_repo_head(&current_head, repo);
+	if (error != 0) {
+		const git_error *err = git_error_last();
+		char* message = err ? err->message : "No detailed messge.";
+		fprintf(stderr, "Unable to look up HEAD: %s\n", message);
+
+		return error;
+	}
+
+	error = git_branch_create(&ref, repo, branch_name, current_head, NO_FORCE);
+	if (error != 0) {
+		fprintf(stderr, "failed to create %s: %s\n", branch_name,
+				git_error_last()->message);
+		return error;
+	}
+	return 0;
+}
+
+
 /** That example's entry point */
 int lg2_checkout(git_repository *repo, int argc, char **argv)
 {
@@ -336,7 +363,7 @@ int lg2_checkout(git_repository *repo, int argc, char **argv)
 		 * Try to create the branch before checking it out
 		 */
 
-		err = lg2_branch_create_from_head(repo, branch_name);
+		err = lg2_branch_create_from_head_no_cleanup(repo, branch_name);
 		if (err < 0) {
 			fprintf(stderr, "failed to create %s: %s\n", branch_name,
 					git_error_last()->message);

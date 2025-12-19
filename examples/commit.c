@@ -54,8 +54,8 @@ int lg2_commit(git_repository *repo, int argc, char **argv)
 	git_object *parent = NULL;
 	git_reference *ref = NULL;
 	git_commit *old_head = NULL;
-	git_signature *author_signature = null;
-	git_signature *committer_signature = null;
+	git_signature *author_signature = NULL;
+	git_signature *committer_signature = NULL;
 
 	/* Validate args */
 	if (parse_options(&opts, argc, argv)) {
@@ -95,17 +95,6 @@ int lg2_commit(git_repository *repo, int argc, char **argv)
 
 	check_lg2(git_signature_default_from_env(&author_signature, &committer_signature, repo),
 			"Error creating signature", NULL);
-
-	check_lg2(git_commit_create_v(
-		&commit_oid,
-		repo,
-		"HEAD",
-		author_signature,
-		committer_signature,
-		NULL,
-		comment,
-		tree,
-		parent ? 1 : 0, parent), "Error creating commit", NULL);
 
 	/**
 	 * Don't create empty commits!

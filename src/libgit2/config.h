@@ -8,7 +8,7 @@
 #define INCLUDE_config_h__
 
 #include "common.h"
-// iOS/OSX architecture definitions
+/* iOS/OSX architecture definitions */
 #include <TargetConditionals.h>
 
 #include "git2.h"

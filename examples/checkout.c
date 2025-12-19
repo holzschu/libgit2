@@ -36,10 +36,10 @@
  */
 
 typedef struct {
-	int force : 1;
-	int progress : 1;
-	int perf : 1;
-	int create : 1;
+	unsigned int force : 1;
+	unsigned int progress : 1;
+	unsigned int perf : 1;
+	unsigned int create : 1;
 
 	git_strarray paths;
 	char *branch_name;

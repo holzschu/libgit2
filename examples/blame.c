@@ -47,9 +47,13 @@ int lg2_blame(git_repository *repo, int argc, char *argv[])
 	if (o.M) blameopts.flags |= GIT_BLAME_TRACK_COPIES_SAME_COMMIT_MOVES;
 	if (o.C) blameopts.flags |= GIT_BLAME_TRACK_COPIES_SAME_COMMIT_COPIES;
 	if (o.F) blameopts.flags |= GIT_BLAME_FIRST_PARENT;
+	if (o.start_line && o.end_line) {
+		blameopts.min_line = o.start_line;
+		blameopts.max_line = o.end_line;
+	}
 
 	/**
-	 * The commit range comes in "commitish" form. Use the rev-parse API to
+	 * The commit range comes in "committish" form. Use the rev-parse API to
 	 * nail down the end points.
 	 */
 	if (o.commitspec) {
@@ -70,7 +74,7 @@ int lg2_blame(git_repository *repo, int argc, char *argv[])
 
 	/**
 	 * Get the raw data inside the blob for output. We use the
-	 * `commitish:path/to/file.txt` format to find it.
+	 * `committish:path/to/file.txt` format to find it.
 	 */
 	if (git_oid_is_zero(&blameopts.newest_commit))
 		strcpy(spec, "HEAD");
@@ -93,7 +97,7 @@ int lg2_blame(git_repository *repo, int argc, char *argv[])
 	while (i < rawsize) {
 		const char *eol = memchr(rawdata + i, '\n', (size_t)(rawsize - i));
 		char oid[10] = {0};
-		const git_blame_hunk *hunk = git_blame_get_hunk_byline(blame, line);
+		const git_blame_hunk *hunk = git_blame_hunk_byline(blame, line);
 
 		if (break_on_null_hunk && !hunk)
 			break;

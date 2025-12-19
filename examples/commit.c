@@ -54,7 +54,8 @@ int lg2_commit(git_repository *repo, int argc, char **argv)
 	git_object *parent = NULL;
 	git_reference *ref = NULL;
 	git_commit *old_head = NULL;
-	git_signature *signature = NULL;
+	git_signature *author_signature = null;
+	git_signature *committer_signature = null;
 
 	/* Validate args */
 	if (parse_options(&opts, argc, argv)) {
@@ -92,6 +93,20 @@ int lg2_commit(git_repository *repo, int argc, char **argv)
 
 	check_lg2(git_tree_lookup(&tree, repo, &tree_oid), "Error looking up tree", NULL);
 
+	check_lg2(git_signature_default_from_env(&author_signature, &committer_signature, repo),
+			"Error creating signature", NULL);
+
+	check_lg2(git_commit_create_v(
+		&commit_oid,
+		repo,
+		"HEAD",
+		author_signature,
+		committer_signature,
+		NULL,
+		comment,
+		tree,
+		parent ? 1 : 0, parent), "Error creating commit", NULL);
+
 	/**
 	 * Don't create empty commits!
 	 */
@@ -120,7 +135,7 @@ int lg2_commit(git_repository *repo, int argc, char **argv)
 		}
 	}
 
-	error = git_signature_default(&signature, repo);
+	error = git_signature_default(&committer_signature, repo);
 	if (error) {
 		handle_signature_create_error(error);
 
@@ -137,7 +152,7 @@ int lg2_commit(git_repository *repo, int argc, char **argv)
 				old_head,
 				"HEAD", // Point HEAD to the last commit
 				NULL, // Leave the author untouched
-				signature, // DO update the committer.
+				committer_signature, // DO update the committer.
 				MESSAGE_ENCODING,
 				opts.message,
 				tree); // Do update the tree.
@@ -147,8 +162,8 @@ int lg2_commit(git_repository *repo, int argc, char **argv)
 			&commit_oid,
 			repo,
 			"HEAD",
-			signature,
-			signature,
+			author_signature,
+			committer_signature,
 			MESSAGE_ENCODING,
 			opts.message,
 			tree,
@@ -157,9 +172,12 @@ int lg2_commit(git_repository *repo, int argc, char **argv)
 
 cleanup:
 	git_index_free(index);
-	git_signature_free(signature);
+	git_signature_free(author_signature);
+	git_signature_free(committer_signature);
 	git_commit_free(old_head);
 	git_tree_free(tree);
+	git_object_free(parent);
+	git_reference_free(ref);
 
 	return error;
 }

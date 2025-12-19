@@ -113,8 +113,8 @@ static int cmd_push(git_repository *repo, struct opts *opts)
 	if (opts->argc)
 		usage("push does not accept any parameters");
 
-	check_lg2(git_signature_default(&signature, repo),
-		  "Unable to get default signature. "
+	check_lg2(git_signature_default_from_env(&signature, NULL, repo),
+		  "Unable to get signature. ", 
 		  INSTRUCTIONS_FOR_STORING_AUTHOR_INFORMATION, NULL);
 	check_lg2(git_stash_save(&stashid, repo, signature, NULL, GIT_STASH_DEFAULT),
 		  "Unable to save stash", NULL);

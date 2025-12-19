@@ -240,7 +240,7 @@ static void init_array(git_strarray *array, git_repository *repo, struct args_in
 	return;
 }
 
-void print_usage(void)
+static void print_usage(void)
 {
 	fprintf(stderr, "usage: lg2 add [options] [--] file-spec [file-spec] [...]\n\n");
 	fprintf(stderr, "\t-n, --dry-run    dry run\n");

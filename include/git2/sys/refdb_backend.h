@@ -12,9 +12,9 @@
 #include "git2/oid.h"
 
 /**
- * @file git2/refdb_backend.h
- * @brief Git custom refs backend functions
- * @defgroup git_refdb_backend Git custom refs backend API
+ * @file git2/sys/refdb_backend.h
+ * @brief Custom reference database backends for refs storage
+ * @defgroup git_refdb_backend Custom reference database backends for refs storage
  * @ingroup Git
  * @{
  */
@@ -56,18 +56,56 @@ struct git_reference_iterator {
 		git_reference_iterator *iter);
 };
 
+typedef enum {
+	/**
+	 * The refdb that is to be initialized is for a worktree.
+	 */
+	GIT_REFDB_BACKEND_INIT_IS_WORKTREE = (1u << 0),
+
+	/*
+	 * Force-overwrite HEAD in case the refdb is already (partially)
+	 * initialized.
+	 */
+	GIT_REFDB_BACKEND_INIT_FORCE_HEAD = (1u << 1)
+} git_refdb_backend_init_flag_t;
+
 /** An instance for a custom backend */
 struct git_refdb_backend {
 	unsigned int version; /**< The backend API version */
+
+	/**
+	 * Create a new refdb and initialize its structures.
+	 *
+	 * A refdb implementation may provide this function; if it is not
+	 * provided, no data structures will be initialized for the refdb when
+	 * a new repository is created.
+	 *
+	 * @param path The path of the Git directory that shall be initialized.
+	 * @param initial_head The target that HEAD should point to. This value
+	 *             should only be applied when there isn't yet a HEAD
+	 *             reference, or when `GIT_REFDB_BACKEND_INIT_FORCE_HEAD`
+	 *             is passed. Optional, if unset the backend should not set
+	 *             up HEAD, either.
+	 * @param mode The mode that shall be used to create files and
+	 *             directories. May be one of `git_repository_init_mode_t`
+	 *             or normal Unix permission bits.
+	 * @param flags A combination of `git_refdb_backend_init_flag_t` flags.
+	 * @return `0` on success, a negative error value code.
+	 */
+	int GIT_CALLBACK(init)(
+		git_refdb_backend *backend,
+		const char *head_target,
+		mode_t mode,
+		uint32_t flags);
 
 	/**
 	 * Queries the refdb backend for the existence of a reference.
 	 *
 	 * A refdb implementation must provide this function.
 	 *
-	 * @arg exists The implementation shall set this to `0` if a ref does
+	 * @param exists The implementation shall set this to `0` if a ref does
 	 *             not exist, otherwise to `1`.
-	 * @arg ref_name The reference's name that should be checked for
+	 * @param ref_name The reference's name that should be checked for
 	 *               existence.
 	 * @return `0` on success, a negative error value code.
 	 */
@@ -81,9 +119,9 @@ struct git_refdb_backend {
 	 *
 	 * A refdb implementation must provide this function.
 	 *
-	 * @arg out The implementation shall set this to the allocated
+	 * @param out The implementation shall set this to the allocated
 	 *          reference, if it could be found, otherwise to `NULL`.
-	 * @arg ref_name The reference's name that should be checked for
+	 * @param ref_name The reference's name that should be checked for
 	 *               existence.
 	 * @return `0` on success, `GIT_ENOTFOUND` if the reference does
 	 *         exist, otherwise a negative error code.
@@ -98,12 +136,12 @@ struct git_refdb_backend {
 	 *
 	 * A refdb implementation must provide this function.
 	 *
-	 * @arg out The implementation shall set this to the allocated
+	 * @param out The implementation shall set this to the allocated
 	 *          reference iterator. A custom structure may be used with an
 	 *          embedded `git_reference_iterator` structure. Both `next`
 	 *          and `next_name` functions of `git_reference_iterator` need
 	 *          to be populated.
-	 * @arg glob A pattern to filter references by. If given, the iterator
+	 * @param glob A pattern to filter references by. If given, the iterator
 	 *           shall only return references that match the glob when
 	 *           passed to `wildmatch`.
 	 * @return `0` on success, otherwise a negative error code.
@@ -118,20 +156,20 @@ struct git_refdb_backend {
 	 *
 	 * A refdb implementation must provide this function.
 	 *
-	 * @arg ref The reference to persist. May either be a symbolic or
+	 * @param ref The reference to persist. May either be a symbolic or
 	 *          direct reference.
-	 * @arg force Whether to write the reference if a reference with the
+	 * @param force Whether to write the reference if a reference with the
 	 *            same name already exists.
-	 * @arg who The person updating the reference. Shall be used to create
+	 * @param who The person updating the reference. Shall be used to create
 	 *          a reflog entry.
-	 * @arg message The message detailing what kind of reference update is
+	 * @param message The message detailing what kind of reference update is
 	 *              performed. Shall be used to create a reflog entry.
-	 * @arg old If not `NULL` and `force` is not set, then the
+	 * @param old If not `NULL` and `force` is not set, then the
 	 *          implementation needs to ensure that the reference is currently at
 	 *          the given OID before writing the new value. If both `old`
 	 *          and `old_target` are `NULL`, then the reference should not
 	 *          exist at the point of writing.
-	 * @arg old_target If not `NULL` and `force` is not set, then the
+	 * @param old_target If not `NULL` and `force` is not set, then the
 	 *                 implementation needs to ensure that the symbolic
 	 *                 reference is currently at the given target before
 	 *                 writing the new value. If both `old` and
@@ -149,15 +187,15 @@ struct git_refdb_backend {
 	 *
 	 * A refdb implementation must provide this function.
 	 *
-	 * @arg out The implementation shall set this to the newly created
+	 * @param out The implementation shall set this to the newly created
 	 *          reference or `NULL` on error.
-	 * @arg old_name The current name of the reference that is to be renamed.
-	 * @arg new_name The new name that the old reference shall be renamed to.
-	 * @arg force Whether to write the reference if a reference with the
+	 * @param old_name The current name of the reference that is to be renamed.
+	 * @param new_name The new name that the old reference shall be renamed to.
+	 * @param force Whether to write the reference if a reference with the
 	 *            target name already exists.
-	 * @arg who The person updating the reference. Shall be used to create
+	 * @param who The person updating the reference. Shall be used to create
 	 *          a reflog entry.
-	 * @arg message The message detailing what kind of reference update is
+	 * @param message The message detailing what kind of reference update is
 	 *              performed. Shall be used to create a reflog entry.
 	 * @return `0` on success, otherwise a negative error code.
 	 */
@@ -173,11 +211,11 @@ struct git_refdb_backend {
 	 *
 	 * A refdb implementation must provide this function.
 	 *
-	 * @arg ref_name The name of the reference name that shall be deleted.
-	 * @arg old_id If not `NULL` and `force` is not set, then the
+	 * @param ref_name The name of the reference name that shall be deleted.
+	 * @param old_id If not `NULL` and `force` is not set, then the
 	 *             implementation needs to ensure that the reference is currently at
 	 *             the given OID before writing the new value.
-	 * @arg old_target If not `NULL` and `force` is not set, then the
+	 * @param old_target If not `NULL` and `force` is not set, then the
 	 *                 implementation needs to ensure that the symbolic
 	 *                 reference is currently at the given target before
 	 *                 writing the new value.
@@ -243,7 +281,7 @@ struct git_refdb_backend {
 	 *
 	 * A refdb implementation must provide this function.
 	 *
-	 * @arg reflog The complete reference log for a given reference. Note
+	 * @param reflog The complete reference log for a given reference. Note
 	 *             that this may contain entries that have already been
 	 *             written to disk.
 	 * @return `0` on success, a negative error code otherwise
@@ -255,8 +293,8 @@ struct git_refdb_backend {
 	 *
 	 * A refdb implementation must provide this function.
 	 *
-	 * @arg old_name The name of old reference whose reflog shall be renamed from.
-	 * @arg new_name The name of new reference whose reflog shall be renamed to.
+	 * @param old_name The name of old reference whose reflog shall be renamed from.
+	 * @param new_name The name of new reference whose reflog shall be renamed to.
 	 * @return `0` on success, a negative error code otherwise
 	 */
 	int GIT_CALLBACK(reflog_rename)(git_refdb_backend *_backend, const char *old_name, const char *new_name);
@@ -266,7 +304,7 @@ struct git_refdb_backend {
 	 *
 	 * A refdb implementation must provide this function.
 	 *
-	 * @arg name The name of the reference whose reflog shall be deleted.
+	 * @param name The name of the reference whose reflog shall be deleted.
 	 * @return `0` on success, a negative error code otherwise
 	 */
 	int GIT_CALLBACK(reflog_delete)(git_refdb_backend *backend, const char *name);
@@ -277,9 +315,9 @@ struct git_refdb_backend {
 	 * A refdb implementation may provide this function; if it is not
 	 * provided, the transaction API will fail to work.
 	 *
-	 * @arg payload_out Opaque parameter that will be passed verbosely to
+	 * @param payload_out Opaque parameter that will be passed verbosely to
 	 *                  `unlock`.
-	 * @arg refname Reference that shall be locked.
+	 * @param refname Reference that shall be locked.
 	 * @return `0` on success, a negative error code otherwise
 	 */
 	int GIT_CALLBACK(lock)(void **payload_out, git_refdb_backend *backend, const char *refname);
@@ -294,16 +332,16 @@ struct git_refdb_backend {
 	 * A refdb implementation must provide this function if a `lock`
 	 * implementation is provided.
 	 *
-	 * @arg payload The payload returned by `lock`.
-	 * @arg success `1` if a reference should be updated, `2` if
+	 * @param payload The payload returned by `lock`.
+	 * @param success `1` if a reference should be updated, `2` if
 	 *              a reference should be deleted, `0` if the lock must be
 	 *              discarded.
-	 * @arg update_reflog `1` in case the reflog should be updated, `0`
+	 * @param update_reflog `1` in case the reflog should be updated, `0`
 	 *                    otherwise.
-	 * @arg ref The reference which should be unlocked.
-	 * @arg who The person updating the reference. Shall be used to create
+	 * @param ref The reference which should be unlocked.
+	 * @param who The person updating the reference. Shall be used to create
 	 *          a reflog entry in case `update_reflog` is set.
-	 * @arg message The message detailing what kind of reference update is
+	 * @param message The message detailing what kind of reference update is
 	 *              performed. Shall be used to create a reflog entry in
 	 *              case `update_reflog` is set.
 	 * @return `0` on success, a negative error code otherwise
@@ -312,7 +350,10 @@ struct git_refdb_backend {
 		      const git_reference *ref, const git_signature *sig, const char *message);
 };
 
+/** Current version for the `git_refdb_backend_options` structure */
 #define GIT_REFDB_BACKEND_VERSION 1
+
+/** Static constructor for `git_refdb_backend_options` */
 #define GIT_REFDB_BACKEND_INIT {GIT_REFDB_BACKEND_VERSION}
 
 /**
@@ -356,6 +397,7 @@ GIT_EXTERN(int) git_refdb_set_backend(
 	git_refdb *refdb,
 	git_refdb_backend *backend);
 
+/** @} */
 GIT_END_DECL
 
 #endif

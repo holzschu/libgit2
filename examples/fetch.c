@@ -75,7 +75,7 @@ int lg2_fetch(git_repository *repo, int argc, char **argv)
 		if (git_remote_create_anonymous(&remote, repo, argv[1]) < 0)
 			goto on_error;
 
-	/* Set up the callbacks (only update_tips for now) */
+	/* Set up the callbacks (only update_refs for now) */
 	fetch_opts.callbacks.update_refs = &update_cb;
 	fetch_opts.callbacks.sideband_progress = &progress_cb;
 	fetch_opts.callbacks.transfer_progress = transfer_progress_cb;

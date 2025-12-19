@@ -23,7 +23,7 @@
 #include <errno.h>
 #include <limits.h>
 
-#include <git2/sys/features.h>
+#include <git2_features.h>
 #ifdef GIT_SSH
 #include <libssh2.h>
 #endif

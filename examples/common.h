@@ -218,7 +218,7 @@ extern void print_repo_state_description(git_repository_state_t state);
 		  "and will travel with them " \
 		  "(e.g. it's shared with servers when you `lg2 push`).\n"
 
-// iOS/OSX architecture definitions
+/* iOS/OSX architecture definitions */
 #include <TargetConditionals.h>
 #if TARGET_OS_IPHONE
 

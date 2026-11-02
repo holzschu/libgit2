@@ -22,6 +22,10 @@ jobs:
   # and their details.  Then we build either in a docker container (Linux)
   # or on the actual hosts (macOS, Windows).
   build:
+    # Only run these workflows on the main repository; prevents people
+    # from using build minutes on their forks.
+    if: github.repository == 'libgit2/libgit2'
+
     strategy:
       matrix:
         platform:
@@ -234,6 +238,10 @@ jobs:
         path: build/results_*.xml
 
   documentation:
+    # Only run these workflows on the main repository; prevents people
+    # from using build minutes on their forks.
+    if: github.repository == 'libgit2/libgit2'
+
     name: Validate documentation
     runs-on: ubuntu-latest
     steps:
@@ -245,9 +253,11 @@ jobs:
         script/api-docs/api-generator.js --validate-only --strict --deprecate-hard  .
 
   test_results:
+    # Only run these workflows on the main repository; prevents people
+    # from using build minutes on their forks.
     name: Test results
     needs: [ build ]
-    if: always()
+    if: always() && github.repository == 'libgit2/libgit2'
     runs-on: ubuntu-latest
     steps:
     - name: Download test results

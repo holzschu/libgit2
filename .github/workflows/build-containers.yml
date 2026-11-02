@@ -18,6 +18,10 @@ jobs:
   # know the sha.  Only do this on CI builds (when the event is a "push")
   # because PR builds from forks lack permission to write packages.
   containers:
+    # Only run these workflows on the main repository; prevents people
+    # from using build minutes on their forks.
+    if: github.repository == 'libgit2/libgit2'
+
     strategy:
       matrix:
         container:

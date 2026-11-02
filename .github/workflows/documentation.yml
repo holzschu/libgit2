@@ -20,6 +20,10 @@ permissions:
 
 jobs:
   documentation:
+    # Only run these workflows on the main repository; prevents people
+    # from using build minutes on their forks.
+    if: github.repository == 'libgit2/libgit2'
+
     name: "Generate documentation"
     runs-on: "ubuntu-latest"
     steps:

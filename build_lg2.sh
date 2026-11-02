@@ -1,105 +1,81 @@
 #!/bin/bash
-
-# M4 Required with Xcode beta:
-export M4=$(xcrun -f m4)
-OSX_SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
-IOS_SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
-SIM_SDKROOT=$(xcrun --sdk iphonesimulator --show-sdk-path)
+set -euo pipefail
 
 source_dir=$PWD
-frameworks_dir=$PWD
+mkdir -p .build/deps
+while read -r checksum url name; do
+	curl --fail --location --retry 3 "$url" -o ".build/deps/$name"
+	echo "$checksum  .build/deps/$name" | shasum -a 256 -c -
+done <<'DEPENDENCIES'
+d429e68102926f58bedd8e8b7105dcd169478cd6da1cef494a5f468482d1c8f5 https://github.com/holzschu/ios_system/releases/download/v3.0.5/ios_system.xcframework.zip ios_system.xcframework.zip
+cacfe1789b197b727119f7e32f561eaf9acc27bf38cd19975b74fce107f868a6 https://github.com/holzschu/libssh2-apple/releases/download/v1.11.0/libssh2-dynamic.xcframework.zip libssh2.xcframework.zip
+8a8de08e6ac9d1f6cb28e0c7e0c988ca2bb3a4de161a53b252a93d09d2af697a https://github.com/holzschu/openssl-apple/releases/download/v1.1.1w/openssl-dynamic.frameworks.zip openssl-frameworks.zip
+51d46b912eb30399cbb5c36c8c8f15eb1a44adcfc9ee581304ac9d3739a84716 https://github.com/holzschu/ios_system/releases/download/v3.0.5/ios_error.h ios_error.h
+DEPENDENCIES
+unzip -oq .build/deps/ios_system.xcframework.zip -d .build/deps
+unzip -oq .build/deps/libssh2.xcframework.zip -d .build/deps
+mkdir -p .build/deps/openssl-frameworks
+unzip -oq .build/deps/openssl-frameworks.zip -d .build/deps/openssl-frameworks
 
-# proj dos not use SYSROOT or CFLAGS with cmake, so we use configure
+for platform in iphoneos iphonesimulator; do
+	if [ "$platform" = iphoneos ]; then
+		arch=arm64
+		link_flags=(-target arm64-apple-ios14.0)
+		dependency_slice=ios-arm64
+		ssh_slice=ios-arm64_arm64e
+		ssl_platform=iPhoneOS
+	else
+		arch="arm64;x86_64"
+		link_flags=(-arch arm64 -arch x86_64 -mios-simulator-version-min=14.0)
+		dependency_slice=ios-arm64_x86_64-simulator
+		ssh_slice=$dependency_slice
+		ssl_platform=iPhoneSimulator
+	fi
+	sdk=$(xcrun --sdk "$platform" --show-sdk-path)
+	frameworks_dir="$source_dir/Frameworks_$platform"
+	rm -rf "$frameworks_dir"
+	mkdir -p "$frameworks_dir"
+	cp -R .build/deps/ios_system.xcframework/"$dependency_slice"/ios_system.framework "$frameworks_dir/"
+	cp -R .build/deps/libssh2.xcframework/"$ssh_slice"/libssh2.framework "$frameworks_dir/"
+	cp -R .build/deps/openssl-frameworks/"$ssl_platform"/openssl.framework "$frameworks_dir/"
 
-mkdir -p build-osx
-pushd build-osx
-cmake $source_dir \
-	-DREGEX_BACKEND=builtin -DBUILD_CLAR=OFF -DBUILD_EXAMPLES=ON -DBUILD_SHARED_LIBS=OFF -DTHREADSAFE=OFF \
-	-DCMAKE_INSTALL_PREFIX=@rpath \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_OSX_SYSROOT=${OSX_SDKROOT} \
-	-DCMAKE_C_COMPILER=$(xcrun --sdk macosx -f clang) \
-	-DCMAKE_C_FLAGS="-I${frameworks_dir}/Frameworks_macosx/libssh2.framework/Headers" \
-	-DCMAKE_MODULE_LINKER_FLAGS="-F${frameworks_dir}/Frameworks_macosx " \
-	-DCMAKE_SHARED_LINKER_FLAGS="-F${frameworks_dir}/Frameworks_macosx " \
-	-DCMAKE_EXE_LINKER_FLAGS="-F${frameworks_dir}/Frameworks_macosx " \
-	-DCMAKE_LIBRARY_PATH=${OSX_SDKROOT}/lib/ \
-	-DCMAKE_INCLUDE_PATH=${OSX_SDKROOT}/include/ 
-make
-popd
+	cmake -S "$source_dir" -B "build-$platform" \
+		-DBUILD_TESTS=OFF -DBUILD_CLI=OFF -DBUILD_EXAMPLES=ON -DBUILD_SHARED_LIBS=OFF \
+		-DUSE_REGEX=builtin -DUSE_THREADS=OFF -DUSE_SSH=libssh2 -DUSE_HTTPS=SecureTransport \
+		-DUSE_AUTH_NEGOTIATE=OFF -DUSE_COMPRESSION=zlib \
+		-DPKG_CONFIG_EXECUTABLE=/usr/bin/false \
+		-DLIBSSH2_LIBRARY="$frameworks_dir/libssh2.framework/libssh2" \
+		-DLIBSSH2_INCLUDE_DIR="$frameworks_dir/libssh2.framework/Headers" \
+		-DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES="$arch" \
+		-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_OSX_SYSROOT="$sdk" \
+		-DCMAKE_C_COMPILER="$(xcrun --sdk "$platform" -f clang)" \
+		-DCMAKE_C_FLAGS="-I$source_dir/.build/deps" \
+		-DCMAKE_EXE_LINKER_FLAGS="-F$frameworks_dir -framework ios_system" \
+		-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY
+	cmake --build "build-$platform" --target lg2 --parallel 3
 
-mkdir -p build-iphoneos
-pushd build-iphoneos
-cmake $source_dir \
-	-DREGEX_BACKEND=builtin -DBUILD_CLAR=OFF -DBUILD_EXAMPLES=ON -DBUILD_SHARED_LIBS=OFF -DTHREADSAFE=OFF\
-	-DCMAKE_INSTALL_PREFIX=@rpath \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_OSX_SYSROOT=${IOS_SDKROOT} \
-	-DCMAKE_C_COMPILER=$(xcrun --sdk iphoneos -f clang) \
-	-DCMAKE_C_FLAGS="-arch arm64 -target arm64-apple-darwin19.6.0 -O2 -miphoneos-version-min=14 -I${frameworks_dir}/Frameworks_iphoneos/libssh2.framework/Headers -I${source_dir}" \
-	-DCMAKE_MODULE_LINKER_FLAGS="-arch arm64 -target arm64-apple-darwin19.6.0 -O2 -miphoneos-version-min=14 -F${frameworks_dir}/Frameworks_iphoneos " \
-	-DCMAKE_SHARED_LINKER_FLAGS="-arch arm64 -target arm64-apple-darwin19.6.0 -O2 -miphoneos-version-min=14 -F${frameworks_dir}/Frameworks_iphoneos " \
-	-DCMAKE_EXE_LINKER_FLAGS="-arch arm64 -target arm64-apple-darwin19.6.0 -O2 -miphoneos-version-min=14 -F${frameworks_dir}/Frameworks_iphoneos -framework ios_system" \
-	-DCMAKE_LIBRARY_PATH=${IOS_SDKROOT}/lib/ \
-	-DCMAKE_INCLUDE_PATH=${IOS_SDKROOT}/include/ 
-make
-pushd examples
-# We need a dynamic library, not an executable:
-ld -arch arm64 -dylib -syslibroot ${IOS_SDKROOT} -F${frameworks_dir}/Frameworks_iphoneos CMakeFiles/lg2.dir/*.c.o  -o lg2.dylib ../libgit2.a -lpthread -framework CoreFoundation -framework Security -framework libssh2 -framework openssl -framework ios_system -liconv -lz
-popd
-popd
-
-mkdir -p build-iphonesimulator
-pushd build-iphonesimulator
-cmake $source_dir \
-	-DREGEX_BACKEND=builtin -DBUILD_CLAR=OFF -DBUILD_EXAMPLES=ON -DBUILD_SHARED_LIBS=OFF -DTHREADSAFE=OFF\
-	-DCMAKE_INSTALL_PREFIX=@rpath \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_OSX_SYSROOT=${SIM_SDKROOT} \
-	-DCMAKE_C_COMPILER=$(xcrun --sdk iphonesimulator -f clang) \
-	-DCMAKE_C_FLAGS="-target x86_64-apple-darwin19.6.0 -O2 -mios-simulator-version-min=14.0 -I${frameworks_dir}/Frameworks_iphonesimulator/libssh2.framework/Headers -I${source_dir}" \
-	-DCMAKE_MODULE_LINKER_FLAGS="-dylib -target x86_64-apple-darwin19.6.0 -O2 -mios-simulator-version-min=14.0 -F${frameworks_dir}/Frameworks_iphonesimulator " \
-	-DCMAKE_SHARED_LINKER_FLAGS="-dylib -target x86_64-apple-darwin19.6.0 -O2 -mios-simulator-version-min=14.0 -F${frameworks_dir}/Frameworks_iphonesimulator " \
-	-DCMAKE_EXE_LINKER_FLAGS="-dylib -target x86_64-apple-darwin19.6.0 -O2 -mios-simulator-version-min=14.0 -F${frameworks_dir}/Frameworks_iphonesimulator -framework ios_system" \
-	-DCMAKE_LIBRARY_PATH=${SIM_SDKROOT}/lib/ \
-	-DCMAKE_INCLUDE_PATH=${SIM_SDKROOT}/include/ 
-make
-pushd examples
-# We need a dynamic library, not an executable:
-ld -arch x86_64 -dylib -syslibroot ${SIM_SDKROOT} -F${frameworks_dir}/Frameworks_iphonesimulator CMakeFiles/lg2.dir/*.c.o  -o lg2.dylib ../libgit2.a -lpthread -framework CoreFoundation -framework Security -framework libssh2 -framework openssl -framework ios_system -liconv -lz
-popd
-popd
-
-# First create frameworks, then change I/O inside lg2 (and libgit2?)
-
-# Now create frameworks:
-for platform in iphoneos iphonesimulator
-do 
-	for binary in lg2
-	do
-		FRAMEWORK_DIR=build/Release-${platform}/${binary}.framework
-		rm -rf ${FRAMEWORK_DIR}
-		mkdir -p ${FRAMEWORK_DIR}
-		cp build-$platform/examples/$binary.dylib ${FRAMEWORK_DIR}/$binary
-		if [ "$platform" == "iphoneos" ]; then
-			cp basic_Info.plist ${FRAMEWORK_DIR}/Info.plist
-		elif [ "$platform" == "iphonesimulator" ]; then
-			cp basic_Info_Simulator.plist ${FRAMEWORK_DIR}/Info.plist
-		else 
-			cp basic_Info_OSX.plist ${FRAMEWORK_DIR}/Info.plist
-		fi
-		plutil -replace CFBundleExecutable -string $binary ${FRAMEWORK_DIR}/Info.plist
-		plutil -replace CFBundleName -string $binary ${FRAMEWORK_DIR}/Info.plist
-		plutil -replace CFBundleIdentifier -string Nicolas-Holzschuch.$binary  ${FRAMEWORK_DIR}/Info.plist
-		install_name_tool -id @rpath/$binary.framework/$binary   ${FRAMEWORK_DIR}/$binary
-	done
+	framework_dir=".build/Release-$platform/lg2.framework"
+	rm -rf "$framework_dir"
+	mkdir -p "$framework_dir"
+	xcrun --sdk "$platform" clang "${link_flags[@]}" -dynamiclib -isysroot "$sdk" \
+		-F"$frameworks_dir" build-"$platform"/examples/CMakeFiles/lg2.dir/*.c.o \
+		build-"$platform"/libgit2.a -lpthread -framework CoreFoundation -framework Security \
+		-framework libssh2 -framework openssl -framework ios_system -liconv -lz \
+		-Wl,-install_name,@rpath/lg2.framework/lg2 -o "$framework_dir/lg2"
+	if [ "$platform" = iphoneos ]; then
+		cp basic_Info.plist "$framework_dir/Info.plist"
+	else
+		cp basic_Info_Simulator.plist "$framework_dir/Info.plist"
+	fi
+	plutil -replace CFBundleExecutable -string lg2 "$framework_dir/Info.plist"
+	plutil -replace CFBundleName -string lg2 "$framework_dir/Info.plist"
+	plutil -replace CFBundleIdentifier -string Nicolas-Holzschuch.lg2 "$framework_dir/Info.plist"
 done
 
-framework=lg2
-rm -rf $framework.xcframework
-xcodebuild -create-xcframework -framework build/Release-iphoneos/$framework.framework -framework build/Release-iphonesimulator/$framework.framework -output $framework.xcframework
-# while we're at it, let's compute the checksum:
-rm -f $framework.xcframework.zip
-zip -rq $framework.xcframework.zip $framework.xcframework
-swift package compute-checksum $framework.xcframework.zip
-
+rm -rf .build/lg2.xcframework
+xcodebuild -create-xcframework -framework .build/Release-iphoneos/lg2.framework \
+	-framework .build/Release-iphonesimulator/lg2.framework -output .build/lg2.xcframework
+rm -f .build/lg2.xcframework.zip
+(cd .build && zip -rq lg2.xcframework.zip lg2.xcframework)
+swift package compute-checksum .build/lg2.xcframework.zip
